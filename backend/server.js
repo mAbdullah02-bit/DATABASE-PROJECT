@@ -41,50 +41,129 @@ app.post('/signup', (req, res) => {
 // Login Route
 // -------------------------
 app.post('/login', (req, res) => {
-    const { email, password } = req.body;
+  const { email, password } = req.body;
 
-    // First fetch the user by email
-    db.query(
-        'SELECT * FROM users WHERE email = ?',
-        [email],
-        (err, results) => {
-            if (err) {
-                console.error(err);
-                return res.status(500).json({ message: 'Database error' });
-            }
-
-            if (results.length === 0) {
-                return res.status(400).json({ message: 'Invalid email or password' });
-            }
-
-            const user = results[0];
-
-            // Compare hashed password
-            bcrypt.compare(password, user.password, (err, isMatch) => {
-                if (err) {
-                    console.error('Error comparing passwords:', err);
-                    return res.status(500).json({ message: 'Error processing request' });
-                }
-
-                if (isMatch) {
-                    res.json({
-                        message: 'Login successful',
-                        user: {
-                            id: user.id,
-                            firstName: user.first_name,
-                            lastName: user.last_name,
-                            email: user.email,
-                            role: user.role  // 🔥 KEY: we return the role!
-                        }
-                    });
-                } else {
-                    res.status(400).json({ message: 'Invalid email or password' });
-                }
-            });
-        }
-    );
+  db.query(
+    'SELECT * FROM users WHERE email = ?',
+    [email],
+    (err, results) => {
+      if (err) {
+        return res.status(500).json({ message: 'Database error' });
+      }
+      if (results.length > 0) {
+        const user = results[0];
+        // Compare passwords
+        bcrypt.compare(password, user.password, (err, isMatch) => {
+          if (isMatch) {
+            res.json({ message: 'Login successful', user });
+          } else {
+            res.status(400).json({ message: 'Invalid credentials' });
+          }
+        });
+      } else {
+        res.status(400).json({ message: 'Invalid email' });
+      }
+    }
+  );
+});
+app.post('/admin/add-game', (req, res) => {
+  const { title, description, price, genre, platform, stock_quantity } = req.body;
+  
+  const insertGame = 'INSERT INTO games (title, description, price, genre, platform) VALUES (?, ?, ?, ?, ?)';
+  
+  db.query(insertGame, [title, description, price, genre, platform], (err, result) => {
+    if (err) {
+      console.error('Error adding game:', err);
+      return res.status(500).json({ message: 'Error adding game' });
+    }
+    
+    const gameId = result.insertId;
+    
+    const insertInventory = 'INSERT INTO inventory (game_id, stock_quantity) VALUES (?, ?)';
+    db.query(insertInventory, [gameId, stock_quantity], (err2) => {
+      if (err2) {
+        console.error('Error adding inventory:', err2);
+        return res.status(500).json({ message: 'Error adding inventory' });
+      }
+      
+      res.json({ message: 'Game and inventory added successfully', newGame: { game_id: gameId, title, description, price, genre, platform, stock_quantity } });
+    });
+  });
 });
 
+// Get all games (JOIN with inventory)
+app.get('/admin/games', (req, res) => {
+  const sql = `
+    SELECT g.*, i.stock_quantity
+    FROM games g
+    LEFT JOIN inventory i ON g.game_id = i.game_id
+  `;
+  db.query(sql, (err, results) => {
+    if (err) {
+      console.error('Error fetching games:', err);
+      return res.status(500).json({ message: 'Error fetching games' });
+    }
+    res.json(results);
+  });
+});
+
+// Edit game
+app.put('/admin/edit-game/:game_id', (req, res) => {
+  const gameId = req.params.game_id;
+  const { title, description, price, genre, platform, stock_quantity } = req.body;
+  
+  const updateGame = `
+    UPDATE games
+    SET title = ?, description = ?, price = ?, genre = ?, platform = ?
+    WHERE game_id = ?
+  `;
+  
+  db.query(updateGame, [title, description, price, genre, platform, gameId], (err) => {
+    if (err) {
+      console.error('Error updating game:', err);
+      return res.status(500).json({ message: 'Error updating game' });
+    }
+    
+    const updateInventory = `
+      UPDATE inventory
+      SET stock_quantity = ?
+      WHERE game_id = ?
+    `;
+    
+    db.query(updateInventory, [stock_quantity, gameId], (err2) => {
+      if (err2) {
+        console.error('Error updating inventory:', err2);
+        return res.status(500).json({ message: 'Error updating inventory' });
+      }
+      
+      res.json({ message: 'Game and inventory updated successfully' });
+    });
+  });
+});
+
+// Delete game (also delete inventory)
+app.delete('/admin/delete-game/:game_id', (req, res) => {
+  const gameId = req.params.game_id;
+  
+  const deleteInventory = 'DELETE FROM inventory WHERE game_id = ?';
+  const deleteGame = 'DELETE FROM games WHERE game_id = ?';
+  
+  db.query(deleteInventory, [gameId], (err) => {
+    if (err) {
+      console.error('Error deleting inventory:', err);
+      return res.status(500).json({ message: 'Error deleting inventory' });
+    }
+    
+    db.query(deleteGame, [gameId], (err2) => {
+      if (err2) {
+        console.error('Error deleting game:', err2);
+        return res.status(500).json({ message: 'Error deleting game' });
+      }
+      
+      res.json({ message: 'Game and inventory deleted successfully' });
+    });
+  });
+});
 // -------------------------
 // Start Server
 // -------------------------
