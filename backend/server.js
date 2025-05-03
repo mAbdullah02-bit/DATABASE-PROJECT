@@ -67,11 +67,12 @@ app.post('/login', (req, res) => {
   );
 });
 app.post('/admin/add-game', (req, res) => {
-  const { title, description, price, genre, platform, stock_quantity } = req.body;
+  const { title, description, price, genre, platform, stock_quantity,imageURL } = req.body;
   
-  const insertGame = 'INSERT INTO games (title, description, price, genre, platform) VALUES (?, ?, ?, ?, ?)';
+  const insertGame = 'INSERT INTO games (title, description, price, genre, platform, imageURL) VALUES (?, ?, ?, ?, ?, ?)';
+
   
-  db.query(insertGame, [title, description, price, genre, platform], (err, result) => {
+  db.query(insertGame, [title, description, price, genre, platform,imageURL || null], (err, result) => {
     if (err) {
       console.error('Error adding game:', err);
       return res.status(500).json({ message: 'Error adding game' });
@@ -110,15 +111,15 @@ app.get('/admin/games', (req, res) => {
 // Edit game
 app.put('/admin/edit-game/:game_id', (req, res) => {
   const gameId = req.params.game_id;
-  const { title, description, price, genre, platform, stock_quantity } = req.body;
+  const { title, description, price, genre, platform, stock_quantity,imageURL } = req.body;
   
   const updateGame = `
     UPDATE games
-    SET title = ?, description = ?, price = ?, genre = ?, platform = ?
+    SET title = ?, description = ?, price = ?, genre = ?, platform = ?,imageURL = ?
     WHERE game_id = ?
   `;
   
-  db.query(updateGame, [title, description, price, genre, platform, gameId], (err) => {
+  db.query(updateGame, [title, description, price, genre, platform , imageURL|| null, gameId], (err) => {
     if (err) {
       console.error('Error updating game:', err);
       return res.status(500).json({ message: 'Error updating game' });
