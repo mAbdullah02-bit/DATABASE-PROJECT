@@ -165,6 +165,54 @@ app.delete('/admin/delete-game/:game_id', (req, res) => {
     });
   });
 });
+// -------------
+// fetch all games for home
+// ------------
+
+// backend/index.js or routes/games.js
+app.get('/api/games', (req, res) => {
+  db.query('SELECT * FROM games', (err, rows) => {
+    if (err) {
+      console.error('Failed to fetch games:', err);
+      return res.status(500).json({ error: 'Failed to fetch games' });
+    }
+    res.json(rows);
+  });
+});
+
+
+// Get a single product by ID
+app.get('/api/games/:id', (req, res) => {
+  const { id } = req.params;
+  const query = 'SELECT * FROM games WHERE game_id = ?';
+
+  db.query(query, [id], (err, results) => {
+    if (err) return res.status(500).json({ error: err.message });
+    if (results.length === 0) return res.status(404).json({ message: 'Product not found' });
+    res.json(results[0]);
+  });
+});
+
+// Get related products (same category)
+app.get('/api/games/:id/related', (req, res) => {
+  const { id } = req.params;
+  const categoryQuery = 'SELECT genre FROM games WHERE game_id = ?';
+
+  db.query(categoryQuery, [id], (err, results) => {
+    if (err) return res.status(500).json({ error: err.message });
+    if (results.length === 0) return res.status(404).json({ message: 'Product not found' });
+
+    const category = results[0].category;
+    const relatedQuery = 'SELECT * FROM games WHERE genre = ? AND game_id != ? LIMIT 6';
+
+    db.query(relatedQuery, [category, id], (err2, relatedResults) => {
+      if (err2) return res.status(500).json({ error: err2.message });
+      res.json(relatedResults);
+    });
+  });
+});
+
+
 // -------------------------
 // Start Server
 // -------------------------
