@@ -250,10 +250,11 @@ app.post('/api/cart', (req, res) => {
 app.get('/api/cart/:userId', (req, res) => {
   const { userId } = req.params;
   const query = `
-    SELECT cart.id AS cartId, games.id AS gameId, games.title, games.price, games.imageURL, cart.quantity
-    FROM cart
-    JOIN games ON cart.gameId = games.id
-    WHERE cart.userId = ?
+    SELECT cart.id AS cartId, games.game_id AS gameId, games.title, games.price, games.imageURL, cart.quantity
+FROM cart
+JOIN games ON cart.gameId = games.game_id
+WHERE cart.userId = ?
+
   `;
   db.query(query, [userId], (err, results) => {
     if (err) return res.status(500).json({ error: 'Failed to fetch cart items' });
@@ -285,7 +286,136 @@ app.patch('/api/cart/:cartId', (req, res) => {
     res.json({ message: 'Quantity updated successfully' });
   });
 });
+//  orderss 
+app.get('/api/orders', (req, res) => {
+  const query = 'SELECT * FROM orders';
+  console.log("Getting all orders")
+  db.query(query, (err, results) => {
+    if (err) return res.status(500).json({ error: 'Failed to fetch orders' });
+    res.json(results);
+  });
+});
 
+// Update order status
+app.patch('/api/orders/:orderId', (req, res) => {
+  const { orderId } = req.params;
+  const { status } = req.body;
+
+  if (!status) return res.status(400).json({ error: 'Missing status' });
+
+  const query = 'UPDATE orders SET status = ? WHERE order_id = ?';
+  db.query(query, [status, orderId], (err) => {
+    if (err) return res.status(500).json({ error: 'Failed to update order status' });
+    res.json({ message: 'Order status updated successfully' });
+  });
+});
+
+app.post('/api/orders', (req, res) => {
+  const { user_id, total_amount, status } = req.body;
+
+  if (!user_id || !total_amount || !status) {
+    return res.status(400).json({ error: 'Missing required fields' });
+  }
+
+  // Assuming the order table looks like: order_id, user_id, order_date, total_amount, status
+  const query = 'INSERT INTO orders (user_id, total_amount, status, order_date) VALUES (?, ?, ?, NOW())';
+  db.query(query, [user_id, total_amount, status], (err, results) => {
+    if (err) {
+      console.error('Error inserting order:', err);  // Log error to help debug
+      return res.status(500).json({ error: 'Failed to insert order' });
+    }
+    
+    // Successfully inserted order, return success message
+    res.status(200).json({
+      message: 'Order placed successfully',
+      order_id: results.insertId,  // 👈 send the new order ID
+    });
+  });
+});
+
+//update quantity
+app.patch('/api/inventory/:gameId', (req, res) => {
+  const { gameId } = req.params;
+  const { quantity } = req.body;
+
+  const selectQuery = 'SELECT stock_quantity FROM inventory WHERE game_id = ?';
+  db.query(selectQuery, [gameId], (err, results) => {
+    if (err) {
+      console.error('Error fetching inventory:', err);
+      return res.status(500).json({ error: 'Failed to fetch inventory' });
+    }
+    if (results.length === 0) {
+      return res.status(404).json({ error: 'Game not found' });
+    }
+
+    const currentStock = results[0].stock_quantity;
+    if (currentStock < quantity) {
+      return res.status(400).json({ error: 'Not enough stock' });
+    }
+
+    const newStock = currentStock - quantity;
+    const updateQuery = 'UPDATE inventory SET stock_quantity = ? WHERE game_id = ?';
+    db.query(updateQuery, [newStock, gameId], (updateErr) => {
+      if (updateErr) {
+        console.error('Error updating inventory:', updateErr);
+        return res.status(500).json({ error: 'Failed to update inventory' });
+      }
+      res.status(200).json({ message: 'Inventory updated successfully' });
+    });
+  });
+});
+
+
+// order tracking
+app.post('/api/orders/pay', (req, res) => {
+  const { order_id, method } = req.body;
+  if (!order_id || !method) return res.status(400).json({ error: 'Missing orderId or method' });
+
+  const updateQuery = 'UPDATE orders SET status = ? WHERE order_id = ?';
+  db.query(updateQuery, ['Completed', order_id], (err) => {
+    if (err) return res.status(500).json({ error: 'Payment failed' });
+    res.json({ message: 'Payment successful' });
+  });
+});
+app.post('/api/pay', async (req, res) => {
+  const { userId, orderId, method } = req.body;
+
+  if (!userId || !orderId || !method) {
+    return res.status(400).json({ message: 'Missing userId, orderId, or method' });
+  }
+
+  const paymentDate = new Date(); // Current date/time
+
+  try {
+    const [result] = await db.execute(
+      `INSERT INTO Payment (userId, orderId, PaymentDate, method)
+       VALUES (?, ?, ?, ?)`,
+      [userId, orderId, paymentDate, method]
+    );
+
+    res.status(201).json({
+      message: 'Payment record created successfully',
+      paymentId: result.insertId,
+    });
+  } catch (error) {
+    console.error('Error inserting payment:', error);
+    res.status(500).json({ message: 'Failed to insert payment' });
+  }
+});
+
+
+app.get('/api/orders/:userId', (req, res) => {
+  console.log('HIT /api/orders/:userId with', req.params.userId);  // <- log this
+  const userId = req.params.userId;
+  const query = 'SELECT * FROM orders WHERE user_id = ?';
+  db.query(query, [userId], (err, results) => {
+    if (err) {
+      console.error('DB ERROR:', err);
+      return res.status(500).json({ error: 'Failed to fetch orders' });
+    }
+    res.json(results);
+  });
+});
 
 // -------------------------
 // Start Server
