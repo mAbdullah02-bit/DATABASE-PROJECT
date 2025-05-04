@@ -214,6 +214,78 @@ app.get('/api/games/:id/related', (req, res) => {
   });
 });
 
+//  CART FUNCTIONALITY
+
+app.post('/api/cart', (req, res) => {
+  const { userId, gameId, quantity } = req.body;
+
+  if (!userId || !gameId) {
+    return res.status(400).json({ error: 'Missing userId or gameId' });
+  }
+
+  // First, check if the item is already in the cart
+  const checkQuery = 'SELECT * FROM cart WHERE userId = ? AND gameId = ?';
+  db.query(checkQuery, [userId, gameId], (err, results) => {
+    if (err) return res.status(500).json({ error: 'Database error' });
+
+    if (results.length > 0) {
+      // Already in cart ➔ update quantity
+      const newQuantity = results[0].quantity + (quantity || 1);
+      const updateQuery = 'UPDATE cart SET quantity = ? WHERE userId = ? AND gameId = ?';
+      db.query(updateQuery, [newQuantity, userId, gameId], (err2) => {
+        if (err2) return res.status(500).json({ error: 'Failed to update cart' });
+        res.json({ message: 'Cart updated successfully' });
+      });
+    } else {
+      // Not in cart ➔ insert new row
+      const insertQuery = 'INSERT INTO cart (userId, gameId, quantity) VALUES (?, ?, ?)';
+      db.query(insertQuery, [userId, gameId, quantity || 1], (err3) => {
+        if (err3) return res.status(500).json({ error: 'Failed to add to cart' });
+        res.json({ message: 'Item added to cart' });
+      });
+    }
+  });
+});
+
+app.get('/api/cart/:userId', (req, res) => {
+  const { userId } = req.params;
+  const query = `
+    SELECT cart.id AS cartId, games.id AS gameId, games.title, games.price, games.imageURL, cart.quantity
+    FROM cart
+    JOIN games ON cart.gameId = games.id
+    WHERE cart.userId = ?
+  `;
+  db.query(query, [userId], (err, results) => {
+    if (err) return res.status(500).json({ error: 'Failed to fetch cart items' });
+    res.json(results);
+  });
+});
+
+
+app.delete('/api/cart/:cartId', (req, res) => {
+  const { cartId } = req.params;
+  const query = 'DELETE FROM cart WHERE id = ?';
+  db.query(query, [cartId], (err) => {
+    if (err) return res.status(500).json({ error: 'Failed to remove item' });
+    res.json({ message: 'Item removed successfully' });
+  });
+});
+
+app.patch('/api/cart/:cartId', (req, res) => {
+  const { cartId } = req.params;
+  const { quantity } = req.body;
+
+  if (!quantity || quantity < 1) {
+    return res.status(400).json({ error: 'Invalid quantity' });
+  }
+
+  const query = 'UPDATE cart SET quantity = ? WHERE id = ?';
+  db.query(query, [quantity, cartId], (err) => {
+    if (err) return res.status(500).json({ error: 'Failed to update quantity' });
+    res.json({ message: 'Quantity updated successfully' });
+  });
+});
+
 
 // -------------------------
 // Start Server
