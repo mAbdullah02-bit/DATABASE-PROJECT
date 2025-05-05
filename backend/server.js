@@ -366,7 +366,7 @@ app.patch('/api/inventory/:gameId', (req, res) => {
 });
 
 
-// order tracking
+// order tracking and payment
 app.post('/api/orders/pay', (req, res) => {
   const { order_id, method } = req.body;
   if (!order_id || !method) return res.status(400).json({ error: 'Missing orderId or method' });
