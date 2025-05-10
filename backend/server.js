@@ -66,6 +66,7 @@ app.post('/login', (req, res) => {
     }
   );
 });
+
 app.post('/admin/add-game', (req, res) => {
   const { title, description, price, genre, platform, stock_quantity,imageURL } = req.body;
   
